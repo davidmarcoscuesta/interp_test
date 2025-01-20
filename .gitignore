@@ -1,0 +1,15 @@
+#.gitignore
+
+*.rds
+
+*.log
+
+
+
+data/
+
+.Rproj.user/
+.Rhistory
+.Rdata
+
+*.qlog
