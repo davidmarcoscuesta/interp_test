@@ -1,0 +1,78 @@
+---
+title: "Testing Interpolation"
+author: "David Cuesta"
+date: "2025-01-19"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# Load the .rds file
+merged_df <- readRDS("merged_vrg_dataset_with_velocities.rds")
+downsampled_df <- readRDS("vrg_downsampled_dataset.rds")
+interpolated_df <- readRDS("vrg_interpolated_dataset.rds")
+# View the structure of the object
+str(interpolated_df)
+# head(downsampled_df)
+names(merged_df)
+# summary(downsampled_df)
+```
+```{r}
+# Remove rows with NA values in key velocity columns
+cleaned_df <- merged_df %>%
+  filter(!is.na(ang_vel) & !is.na(euc_vel))
+
+# Save the cleaned dataset
+saveRDS(cleaned_df, "merged_vrg_dataset_with_velocities_cleaned.rds")
+```
+
+```{r}
+# Load the cleaned dataset
+cleaned_df <- readRDS("merged_vrg_dataset_with_velocities_cleaned.rds")
+
+# Define the downsampling factor (e.g., halve the frequency)
+downsampling_factor <- 2
+
+# Downsample the dataset
+downsampled_df <- cleaned_df %>%
+  group_by(participant_id, session, task) %>%
+  filter(row_number() %% downsampling_factor == 1) %>%
+  ungroup()
+
+# Save the downsampled dataset
+saveRDS(downsampled_df, "vrg_downsampled_dataset_without_nas.rds")
+
+```
+
+# Interpolated 
+```{r}
+# Load the corrected downsampled dataset
+downsampled_df <- readRDS("vrg_downsampled_dataset_without_nas.rds")
+
+# Define the original sampling rate and the desired upsampled rate
+original_freq <- 60  # Downsampled frequency (Hz)
+target_freq <- 120   # Original frequency (Hz)
+upsample_factor <- target_freq / original_freq
+
+# Perform interpolation
+interpolated_df <- downsampled_df %>%
+  group_by(participant_id, session, task) %>%
+  mutate(
+    n_interp = seq(min(n), max(n), length.out = n() * upsample_factor),
+    x = approx(n, x, xout = n_interp, rule = 2)$y,
+    y = approx(n, y, xout = n_interp, rule = 2)$y,
+    ang_vel = approx(n, ang_vel, xout = n_interp, rule = 2)$y,
+    euc_vel = approx(n, euc_vel, xout = n_interp, rule = 2)$y
+  ) %>%
+  ungroup()
+
+# Save the corrected interpolated dataset
+saveRDS(interpolated_df, "vrg_interpolated_dataset_corrected.rds")
+
+```
+
+
+
