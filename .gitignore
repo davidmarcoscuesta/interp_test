@@ -1,6 +1,0 @@
-# Ignore everything except .R and .Rmd
-
-*
-
-!*.R
-!*.Rmd
