@@ -1,15 +1,6 @@
-#.gitignore
+# Ignore everything except .R and .Rmd
 
-*.rds
+*
 
-*.log
-
-
-
-data/
-
-.Rproj.user/
-.Rhistory
-.Rdata
-
-*.qlog
+!*.R
+!*.Rmd
