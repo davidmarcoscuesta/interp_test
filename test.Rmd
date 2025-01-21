@@ -7,19 +7,23 @@ output: html_document
 
 ```{r}
 library(tidyverse)
+library(imputeTS)
+library(dplyr)
 ```
 
 ```{r}
 # Load the .rds file
 merged_df <- readRDS("merged_vrg_dataset_with_velocities.rds")
-downsampled_df <- readRDS("vrg_downsampled_dataset.rds")
-interpolated_df <- readRDS("vrg_interpolated_dataset.rds")
+# downsampled_df <- readRDS("vrg_downsampled_dataset.rds")
+# interpolated_df <- readRDS("vrg_interpolated_dataset.rds")
+
 # View the structure of the object
 str(interpolated_df)
 # head(downsampled_df)
 names(merged_df)
 # summary(downsampled_df)
 ```
+
 ```{r}
 # Remove rows with NA values in key velocity columns
 cleaned_df <- merged_df %>%
@@ -29,39 +33,86 @@ cleaned_df <- merged_df %>%
 saveRDS(cleaned_df, "merged_vrg_dataset_with_velocities_cleaned.rds")
 ```
 
+# Downsampling from 250 to 125 Hz
 ```{r}
-# Load the cleaned dataset
 cleaned_df <- readRDS("merged_vrg_dataset_with_velocities_cleaned.rds")
+```
 
-# Define the downsampling factor (e.g., halve the frequency)
+```{r}
 downsampling_factor <- 2
 
-# Downsample the dataset
 downsampled_df <- cleaned_df %>%
   group_by(participant_id, session, task) %>%
   filter(row_number() %% downsampling_factor == 1) %>%
   ungroup()
 
-# Save the downsampled dataset
-saveRDS(downsampled_df, "vrg_downsampled_dataset_without_nas.rds")
+# saveRDS(downsampled_df, "vrg_downsampled_dataset_without_nas.rds")
 
 ```
 
-# Interpolated 
-```{r}
-# Load the corrected downsampled dataset
-downsampled_df <- readRDS("vrg_downsampled_dataset_without_nas.rds")
+# Interpolate from 125 to 250 Hz
 
-# Define the original sampling rate and the desired upsampled rate
-original_freq <- 60  # Downsampled frequency (Hz)
-target_freq <- 120   # Original frequency (Hz)
-upsample_factor <- target_freq / original_freq
+- Cubic Spline Interpolation: Ensures smooth transitions, especially suitable for continuous movements like gaze data.
+- Radial Basis Function (RBF) Interpolation: Handles irregularly spaced data points, which might occur in your dataset.
+- Polynomial Interpolation (e.g., Lagrange): Useful for small segments but prone to oscillations in larger datasets.
+- Piecewise Linear Interpolation: Simpler but may not capture smooth gaze trajectories. 
+
+```{r}
+# Postpro
+downsampled_df <- readRDS("vrg_downsampled_dataset_without_nas.rds")
+```
+
+# Testing in oe subject
+
+```{r}
+single_group <- downsampled_df %>%
+  filter(participant_id == "1002", session == "1", task == "VRG") %>%
+  arrange(n)  # Ensure `n` is sorted
+```
+
+
+```{r}
+# Define original and target frequencies
+original_freq <- 125  # Downsampled frequency (Hz)
+target_freq <- 250    # Desired frequency (Hz)
 
 # Perform interpolation
+single_interpolated <- single_group %>%
+  mutate(
+    # Generate interpolated time points using target frequency
+    n_interp = seq(
+      from = min(n, na.rm = TRUE),
+      to = max(n, na.rm = TRUE),
+      length.out = round(nrow(single_group) * (target_freq / original_freq))
+    ),
+    
+    # Interpolate values for each column
+    x = approx(n, x, xout = n_interp, rule = 2)$y,
+    y = approx(n, y, xout = n_interp, rule = 2)$y,
+    ang_vel = approx(n, ang_vel, xout = n_interp, rule = 2)$y,
+    euc_vel = approx(n, euc_vel, xout = n_interp, rule = 2)$y
+  )
+
+```
+
+
+```{r}
+# Define frequencies
+original_freq <- 125  # Downsampled frequency (Hz)
+target_freq <- 250    # Desired frequency (Hz)
+
 interpolated_df <- downsampled_df %>%
   group_by(participant_id, session, task) %>%
+  arrange(n) %>%  # Ensure n is sorted
   mutate(
-    n_interp = seq(min(n), max(n), length.out = n() * upsample_factor),
+    # Generate interpolated time points using target frequency
+    n_interp = seq(
+      from = min(n, na.rm = TRUE),
+      to = max(n, na.rm = TRUE),
+      length.out = round(length(n) * (target_freq / original_freq))
+    ),
+
+    # Interpolate values for each column
     x = approx(n, x, xout = n_interp, rule = 2)$y,
     y = approx(n, y, xout = n_interp, rule = 2)$y,
     ang_vel = approx(n, ang_vel, xout = n_interp, rule = 2)$y,
@@ -69,7 +120,9 @@ interpolated_df <- downsampled_df %>%
   ) %>%
   ungroup()
 
-# Save the corrected interpolated dataset
+  select(-time_range, -num_points)  # Remove temporary columns
+
+# Save the interpolated dataset
 saveRDS(interpolated_df, "vrg_interpolated_dataset_corrected.rds")
 
 ```
