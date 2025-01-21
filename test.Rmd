@@ -60,6 +60,8 @@ downsampled_df <- cleaned_df %>%
 ```{r}
 # Postpro
 downsampled_df <- readRDS("vrg_downsampled_dataset_without_nas.rds")
+
+write.csv(downsampled_df, "downsampled_df.csv", row.names = FALSE)
 ```
 
 # Testing in oe subject
