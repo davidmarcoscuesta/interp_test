@@ -85,6 +85,27 @@ sampling_intervals <- cleaned_df %>%
 # View the results
 print(sampling_intervals)
 ```
+```{r}
+# Add frequency calculation
+sampling_frequency <- sampling_intervals %>%
+  mutate(
+    frequency_hz = 1000 / mean_interval  # Convert ms to Hz
+  )
 
+# View the results
+print(sampling_frequency)
 
+```
+
+```{r}
+# Overall mean frequency
+overall_frequency <- mean(sampling_frequency$frequency_hz, na.rm = TRUE)
+
+# Range of frequencies
+frequency_range <- range(sampling_frequency$frequency_hz, na.rm = TRUE)
+
+# Print the results
+cat("Overall Frequency (Hz):", overall_frequency, "\n")
+cat("Frequency Range (Hz):", frequency_range, "\n")
+```
 
