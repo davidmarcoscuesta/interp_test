@@ -73,6 +73,18 @@ interpolated_df <- downsampled_df %>%
 saveRDS(interpolated_df, "vrg_interpolated_dataset_corrected.rds")
 
 ```
+```{r}
+# Check the time interval within each group
+sampling_intervals <- cleaned_df %>%
+  group_by(participant_id, session, task) %>%
+  summarise(
+    mean_interval = mean(diff(n), na.rm = TRUE)  # Mean interval in milliseconds
+  ) %>%
+  ungroup()
+
+# View the results
+print(sampling_intervals)
+```
 
 
 
