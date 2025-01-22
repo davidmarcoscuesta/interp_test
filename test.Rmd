@@ -7,7 +7,7 @@ output: html_document
 
 ```{r}
 library(tidyverse)
-library(imputeTS)
+library(imputeTS) # Interpolation 
 library(dplyr)
 ```
 
@@ -52,6 +52,9 @@ downsampled_df <- cleaned_df %>%
 
 # Interpolate from 125 to 250 Hz
 
+- Python: Numpy or pandas interpolated function
+- R: 
+
 - Cubic Spline Interpolation: Ensures smooth transitions, especially suitable for continuous movements like gaze data.
 - Radial Basis Function (RBF) Interpolation: Handles irregularly spaced data points, which might occur in your dataset.
 - Polynomial Interpolation (e.g., Lagrange): Useful for small segments but prone to oscillations in larger datasets.
@@ -61,7 +64,16 @@ downsampled_df <- cleaned_df %>%
 # Postpro
 downsampled_df <- readRDS("vrg_downsampled_dataset_without_nas.rds")
 
-write.csv(downsampled_df, "downsampled_df.csv", row.names = FALSE)
+# write.csv(downsampled_df, "downsampled_df.csv", row.names = FALSE)
+```
+
+# Reconstruct Time
+```{r}
+# Compute time column for each participant
+downsampled_df <- downsampled_df %>%
+  group_by(participant_id, session) %>%  # Group by participant and session
+  mutate(time = cumsum(dt)) %>%          # Compute cumulative sum of dt within each group
+  ungroup()                              # Remove grouping for further analysis
 ```
 
 # Testing in oe subject
@@ -83,12 +95,12 @@ single_interpolated <- single_group %>%
   mutate(
     # Generate interpolated time points using target frequency
     n_interp = seq(
-      from = min(n, na.rm = TRUE),
-      to = max(n, na.rm = TRUE),
+      from = min(n, na.rm = FALSE),
+      to = max(n, na.rm = FALSE),
       length.out = round(nrow(single_group) * (target_freq / original_freq))
     ),
     
-    # Interpolate values for each column
+  Interpolate values for each column
     x = approx(n, x, xout = n_interp, rule = 2)$y,
     y = approx(n, y, xout = n_interp, rule = 2)$y,
     ang_vel = approx(n, ang_vel, xout = n_interp, rule = 2)$y,
