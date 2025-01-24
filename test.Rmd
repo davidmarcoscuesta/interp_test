@@ -9,6 +9,7 @@ output: html_document
 library(tidyverse)
 library(imputeTS) # Interpolation 
 library(dplyr)
+library(pracma)
 ```
 
 ```{r}
@@ -31,7 +32,72 @@ cleaned_df <- merged_df %>%
 
 # Save the cleaned dataset
 saveRDS(cleaned_df, "merged_vrg_dataset_with_velocities_cleaned.rds")
+
+write.csv(cleaned_df, "vrg_raw_cleaned.csv", row.names = FALSE)
+
 ```
+
+# 
+
+```{r}
+# Define the target frequencies
+cleaned_target_dt <- 1 / 250  # 250 Hz => 0.004 seconds
+downsampled_target_dt <- 1 / 125  # 125 Hz => 0.008 seconds
+
+# Select the dataset you want to process (either cleaned_df or downsampled_df)
+target_df <- cleaned_df  # Replace with downsampled_df for 125 Hz
+
+# Initialize an empty dataframe to store interpolated data
+interpolated_data <- NULL
+
+# Loop through each participant/session
+unique_trials <- unique(target_df %>% select(participant_id, session))
+
+for (trial in 1:nrow(unique_trials)) {
+  # Filter data for the current participant/session
+  cur <- target_df %>%
+    filter(participant_id == unique_trials$participant_id[trial],
+           session == unique_trials$session[trial])
+  
+  # Define target time step based on dataset
+  target_dt <- ifelse(identical(target_df, cleaned_df), cleaned_target_dt, downsampled_target_dt)
+  
+  # Compute cumulative time
+  cur_time <- cumsum(cur$dt)
+  
+  # Define uniform time points for interpolation within the range of cur_time
+  interp_points <- seq(from = min(cur_time, na.rm = TRUE), 
+                       to = max(cur_time, na.rm = TRUE), 
+                       by = target_dt)
+  
+  # Interpolate x and y coordinates
+  interp_x <- pracma::interp1(x = cur_time, y = cur$x, xi = interp_points, method = "linear")
+  interp_y <- pracma::interp1(x = cur_time, y = cur$y, xi = interp_points, method = "linear")
+  
+  # Create a dataframe for the interpolated trial
+  newdata <- data.frame(
+    participant_id = unique(cur$participant_id),
+    session = unique(cur$session),
+    t = interp_points,
+    x = interp_x,
+    y = interp_y
+  )
+  
+  # Append to the final interpolated dataset
+  if (is.null(interpolated_data)) {
+    interpolated_data <- newdata
+  } else {
+    interpolated_data <- bind_rows(interpolated_data, newdata)
+  }
+}
+
+# Save the interpolated data
+write.csv(interpolated_data, "interpolated_raw_dataset.csv", row.names = FALSE)
+
+
+```
+
+
 
 # Downsampling from 250 to 125 Hz
 ```{r}
@@ -68,6 +134,15 @@ downsampled_df <- readRDS("vrg_downsampled_dataset_without_nas.rds")
 ```
 
 # Reconstruct Time
+
+```{r}
+# Compute time column for each participant
+cleaned_df <- cleaned_df %>%
+  group_by(participant_id, session) %>%  # Group by participant and session
+  mutate(time = cumsum(dt)) %>%          # Compute cumulative sum of dt within each group
+  ungroup()  
+```
+
 ```{r}
 # Compute time column for each participant
 downsampled_df <- downsampled_df %>%
@@ -76,70 +151,8 @@ downsampled_df <- downsampled_df %>%
   ungroup()                              # Remove grouping for further analysis
 ```
 
-# Testing in oe subject
 
-```{r}
-single_group <- downsampled_df %>%
-  filter(participant_id == "1002", session == "1", task == "VRG") %>%
-  arrange(n)  # Ensure `n` is sorted
-```
-
-
-```{r}
-# Define original and target frequencies
-original_freq <- 125  # Downsampled frequency (Hz)
-target_freq <- 250    # Desired frequency (Hz)
-
-# Perform interpolation
-single_interpolated <- single_group %>%
-  mutate(
-    # Generate interpolated time points using target frequency
-    n_interp = seq(
-      from = min(n, na.rm = FALSE),
-      to = max(n, na.rm = FALSE),
-      length.out = round(nrow(single_group) * (target_freq / original_freq))
-    ),
-    
-  Interpolate values for each column
-    x = approx(n, x, xout = n_interp, rule = 2)$y,
-    y = approx(n, y, xout = n_interp, rule = 2)$y,
-    ang_vel = approx(n, ang_vel, xout = n_interp, rule = 2)$y,
-    euc_vel = approx(n, euc_vel, xout = n_interp, rule = 2)$y
-  )
-
-```
-
-
-```{r}
-# Define frequencies
-original_freq <- 125  # Downsampled frequency (Hz)
-target_freq <- 250    # Desired frequency (Hz)
-
-interpolated_df <- downsampled_df %>%
-  group_by(participant_id, session, task) %>%
-  arrange(n) %>%  # Ensure n is sorted
-  mutate(
-    # Generate interpolated time points using target frequency
-    n_interp = seq(
-      from = min(n, na.rm = TRUE),
-      to = max(n, na.rm = TRUE),
-      length.out = round(length(n) * (target_freq / original_freq))
-    ),
-
-    # Interpolate values for each column
-    x = approx(n, x, xout = n_interp, rule = 2)$y,
-    y = approx(n, y, xout = n_interp, rule = 2)$y,
-    ang_vel = approx(n, ang_vel, xout = n_interp, rule = 2)$y,
-    euc_vel = approx(n, euc_vel, xout = n_interp, rule = 2)$y
-  ) %>%
-  ungroup()
-
-  select(-time_range, -num_points)  # Remove temporary columns
-
-# Save the interpolated dataset
-saveRDS(interpolated_df, "vrg_interpolated_dataset_corrected.rds")
-
-```
+# Checking Fz 
 ```{r}
 # Check the time interval within each group
 sampling_intervals <- cleaned_df %>%
